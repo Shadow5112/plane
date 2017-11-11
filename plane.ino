@@ -68,7 +68,7 @@ void setup() {
   pinMode(throttle_in, INPUT);
   pinMode(throttle_out, OUTPUT);
 
-  pinMode(autopilot, INPUT);
+  pinMode(auto_pilot, INPUT);
   pinMode(flip_input, INPUT);
   pinMode(barrel_roll, INPUT);
 
