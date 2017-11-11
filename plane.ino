@@ -18,7 +18,7 @@ int throttle_in; // assign pin number for throttle
 int throttle_out;
 
 int auto_pilot; // assign pin numbers for auto functions
-int flip;
+int flip_input;
 int barrel_roll;
 
 
@@ -28,14 +28,14 @@ volatile bool check_auto(); //returns true/false if auto pilot is engaged
 void manual(); //declare inturupt function
 
 float gyro(); //returns usable gyro values
-float gyro.x();
-float gyro.y();
-float gyro.z();
+float gyro_x();
+float gyro_y();
+float gyro_z();
 
 float accel(); // returns usable acceleration values in m/s
-float accel.x();
-float accel.y();
-float accel.z();
+float accel_x();
+float accel_y();
+float accel_z();
 
 float velocity(); // returns current speed
 
@@ -45,12 +45,11 @@ void land();
 void takeoff();
 void flip(); //backwards loop
 
-float altitude(): // returns altitude with ultrasonc sensor. Range = 2-3 meters
+float altitude(); // returns altitude with ultrasonc sensor. Range = 2-3 meters
 
 void stabalize();
 
-
-  void setup() {
+void setup() {
   Serial.begin(9600);
 
   //assign pins
@@ -70,7 +69,7 @@ void stabalize();
   pinMode(throttle_out, OUTPUT);
 
   pinMode(autopilot, INPUT);
-  pinMode(flip, INPUT);
+  pinMode(flip_input, INPUT);
   pinMode(barrel_roll, INPUT);
 
   attachInterrupt(0,manual,RISING);
@@ -92,47 +91,63 @@ void manual(){
 }
 
 bool check_autopilot() {
+  return false;
 }
 
 float altitude() {
+return 0;
 }
 
-array float gyro() {
+float gyro() {
+return 0;
 }
 
-float gyro.x() {
+float gyro_x() {
+return 0;
 }
-float gyro.y() {
+float gyro_y() {
+return 0;
 }
-float gyro.z() {
+float gyro_z() {
+return 0;
 }
 
-array float accel() {
+float accel() {
+return 0;
 } // returns usable acceleration values in m/s
-float accel.x() {
+float accel_x() {
+return 0;
 }
-float accel.y() {
+float accel_y() {
+return 0;
 }
-float accel.z() {
+float accel_z() {
+return 0;
 }
 
 //returns current speed
 float velocity() {
+return 0;
 }
 
 //autopiolot funcitions
 
 void stabalize() {
+
 }
 void barrle_roll() {
+
 }
 
 void land() {
+  
 }
 
 void takeoff() {
+
 }
 
 //backwards loop
 void flip() {
+
 }
