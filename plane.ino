@@ -17,14 +17,12 @@ int rudder_out;
 int throttle_in; // assign pin number for throttle
 int throttle_out;
 
-int auto_pilot; // assign pin numbers for auto functions
+int auto_pilot; // assign pin nuber for auto pilot inturupt function
 int flip_input;
 int barrel_roll;
 
 
 // declare all nesicary functions
-
-volatile bool check_auto(); //returns true/false if auto pilot is engaged
 void manual(); //declare inturupt function
 
 float gyro(); //returns usable gyro values
@@ -72,7 +70,7 @@ void setup() {
   pinMode(flip_input, INPUT);
   pinMode(barrel_roll, INPUT);
 
-  attachInterrupt(0,manual,RISING);
+  attachInterrupt(digitalPinToInterrupt(auto_pilot),manual,LOW);
 }
 
 void loop() {
@@ -81,17 +79,14 @@ void loop() {
 }
 
 void manual(){
+  while(digitalRead(auto_pilot) != LOW){
   analogWrite(aileron_l_out, analogRead(aileron_l_in));
   analogWrite(aileron_r_out, analogRead(aileron_r_in));
   analogWrite(elevator_out, analogRead(elevator_in));
   analogWrite(rudder_out, analogRead(rudder_in));
   analogWrite(throttle_out, analogRead(throttle_in));
-
-       
-}
-
-bool check_autopilot() {
-  return false;
+  }
+  
 }
 
 float altitude() {
