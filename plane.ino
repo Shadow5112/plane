@@ -21,6 +21,18 @@ int auto_pilot; // assign pin nuber for auto pilot inturupt function
 int flip_input;
 int barrel_roll;
 
+//declare servo variables 
+Servo  aileron_l_servo,
+       aileron_r_servo,
+       elevator_servo,
+       rudder_servo,
+       throttle_servo;
+       
+// declare initial possition of each servo 0-180 degrees
+int aileron_start;
+int elevator_start;
+int rudder_start;
+int throttle_start;
 
 // declare all nesicary functions
 void manual(); //declare inturupt function
@@ -69,6 +81,21 @@ void setup() {
   pinMode(auto_pilot, INPUT);
   pinMode(flip_input, INPUT);
   pinMode(barrel_roll, INPUT);
+  
+  
+  //attach servos to pins
+  aileron_l_servo.attach(aileron_l_out);
+  aileron_r_servo.attach(aileron_r_out);
+  elevator_servo.attach(elevator_out);
+  rudder_servo.attach(elevator_out);
+  throttle_servo.attach(throttle_out);
+
+  //set servos to initial possitions
+  aileron_l_servo.write(aileron_start);
+  aileron_r_servo.write(aileron_start);
+  elevator_servo.write(elevator_start);
+  rudder_servo.write(rudder_start);
+  throttle_servo.write(throttle_start);
 
   attachInterrupt(digitalPinToInterrupt(auto_pilot),manual,LOW);
 }
