@@ -171,5 +171,14 @@ void takeoff() {
 
 //backwards loop
 void flip() {
-
+  if (altitude() < 0 ) // check if plane is above ultrasonic sensor range
+  {
+    float level =  gyro_x(); // raise elevator to maximum angle unti the plane returns to its origaonl angle 
+    while (!level) {   
+      elevator_servo.write(elevator_max);
+    }
+  }
+  else {
+    return;
+  }
 }
