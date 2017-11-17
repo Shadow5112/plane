@@ -177,6 +177,7 @@ void flip() {
     while (!level) {   
       elevator_servo.write(elevator_max);
     }
+    stabalize();
   }
   else {
     return;
