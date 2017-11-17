@@ -3,6 +3,9 @@
 
 #include <Servo.h>
 
+int trig_pin; //assign pins for ultrasonic sensor
+int echo_pin;
+
 int aileron_l_in;  //assign pin numbers for ailerons
 int aileron_l_out;
 int aileron_r_in;
@@ -62,7 +65,11 @@ void stabalize();
 void setup() {
   Serial.begin(9600);
 
-  //assign pins
+  //assign pins and declare if they're input or output
+  pinMode(trig_pin, OUTPUT); 
+  pinMode(echo_pin, INPUT);
+       
+       
   pinMode(aileron_l_in, INPUT);
   pinMode(aileron_l_out, OUTPUT);
 
@@ -117,7 +124,23 @@ void manual(){
 }
 
 float altitude() {
-return 0;
+ long duration;
+
+  /*
+   * write low to ensure a clean high then triger sensor with a 10 microsecond high
+   */
+  digitalWrite(trig_pin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trig_pin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trig_pin, LOW);
+
+  duration = pulseIn(echo_pin, HIGH);
+
+  return duration / 29 / 2; /*
+  speed of sound is 340m/s or 29 microseconds/cm then
+  /2 to compensate for the there and back again of the sound
+  */
 }
 
 float gyro() {
