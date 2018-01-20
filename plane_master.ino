@@ -312,44 +312,58 @@ float altitude() {
 }
 
 void gyro_update() {
-
-  float gyro_roll_temp, gyro_pitch_temp, gyro_yaw_temp,
-        delta_roll, delta_pitch, delta_yaw;
-
-  delta_roll = gyro_roll;
-  delta_pitch = gyro_pitch;
-  delta_yaw = gyro_yaw;
-
   int roll, pitch, yaw;
 
-  int accel_x_temp, accel_y_temp, accel_z_temp;
+  float gyro_roll_vel, gyro_pitch_vel, gyro_yaw_vel,
+        delta_roll, delta_pitch, delta_yaw;
+
+  int accel_x_raw, accel_y_raw, accel_z_raw;
+
+  float accel_x, accel_y, accel_z;
+
+
+
 
   //Serial.println("updating Gyro");
   CurieIMU.readGyro(roll, pitch, yaw); // reads and store raw data from gyro)
 
-  gyro_roll_temp = (roll / 32768.9) * CurieIMU.getGyroRange(); // conver raw data into degrees/second for angular accel
-  gyro_pitch_temp = (pitch / 32768.9) * CurieIMU.getGyroRange();
-  gyro_yaw_temp = (yaw / 32768.9) * CurieIMU. getGyroRange();
+  gyro_roll_vel = (float(roll) / 32768.9) * CurieIMU.getGyroRange() ; // conver raw data into degrees/second for angular accel
+  gyro_pitch_vel = (float(pitch) / 32768.9) * CurieIMU.getGyroRange();
+  gyro_yaw_vel = (float(yaw) / 32768.9) * CurieIMU.getGyroRange() ;
 
-  delta_roll += gyro_roll_temp / (CurieIMU.getGyroRate());// divide by gyro sample rate (Hz)
-  delta_pitch += gyro_pitch_temp / (CurieIMU.getGyroRate());// find distance traveled during sample
-  delta_yaw += gyro_yaw_temp / (CurieIMU.getGyroRate());
+  unsigned long micro_time = micros();
 
+  delta_roll = gyro_roll_vel / CurieIMU.getGyroRate() ; //
+  delta_pitch = gyro_pitch_vel / CurieIMU.getGyroRate() ; // find distance traveled during sample
+  delta_yaw = gyro_yaw_vel / CurieIMU.getGyroRate();
 
-  CurieIMU.readAccelerometer(accel_x_temp, accel_y_temp, accel_z_temp);
-  float accel_vec_tot = sqrt(accel_x_temp * accel_x_temp + accel_y_temp * accel_y_temp +  accel_z_temp * accel_z_temp);
+  gyro_pitch += delta_pitch;
+  gyro_roll += delta_roll;
+  gyro_yaw += delta_yaw;
 
-  float angle_pitch_accel = asin((float)accel_y_temp / accel_vec_tot) * 57.296;
-  float angle_roll_accel = asin((float)accel_x_temp / accel_vec_tot) * -57.296;
+  gyro_pitch += gyro_roll * sin(gyro_yaw * 0.000001066);
+  gyro_roll -= gyro_yaw * sin(gyro_yaw * 0.000001066);
 
-  delta_pitch = delta_pitch * 0.9996 + angle_pitch_accel * 0.0004;     //Correct the drift of the gyro pitch angle with the accelerometer pitch angle
-  delta_roll = delta_roll * 0.9996 + angle_roll_accel * 0.0004;
+  CurieIMU.readAccelerometer(accel_x_raw, accel_y_raw, accel_z_raw);
 
-  gyro_roll = gyro_roll * 0.9 + delta_roll * 0.1;
-  gyro_pitch = gyro_pitch * 0.9 + delta_pitch * 0.1;
+  accel_x = (float(accel_x_raw) / 32768.0) *  CurieIMU.getAccelerometerRange();// convert raw data into (g)s
+  accel_y = (float(accel_y_raw) / 32768.0) *  CurieIMU.getAccelerometerRange();
+  accel_z = (float(accel_z_raw) / 32768.0) *  CurieIMU.getAccelerometerRange();
+
+  float accel_vec = sqrt(accel_x * accel_x + accel_y * accel_y + accel_z * accel_z);
+  float accel_pitch_angle, accel_roll_angle;
+
+  accel_roll_angle = asin((float)accel_y / accel_vec) * 57.296;// calculate oriectation bassed on accelerometer
+  accel_pitch_angle = asin((float)accel_x / accel_vec) * -57.296;
+
+  gyro_pitch = gyro_pitch * .9996 + accel_pitch_angle * .0004;
+  gyro_roll = gyro_roll * 0.9996 + accel_roll_angle * 0.0004;
+
+  gyro_pitch = gyro_pitch * .9994 + accel_pitch_angle*.0006; // buffers the gyro angle so that it corrects any drift
+  gyro_roll = gyro_roll * 0.9994 + accel_roll_angle * 0.0006;//based on the angle from the acceleromiter
+
 
 }
-
 //returns current speed
 void velocity_update() {
 
@@ -451,58 +465,76 @@ bool command_finish = true;
 unsigned long start_time, finish_time;
 
 void loop() {
-
-  if (command_finish) {
-    flight_data = SD.open("flight_data.txt", FILE_WRITE);
-    if ( digitalRead(flip_pin) == HIGH) {
-      transmit_code(1);
-      start_time = millis();
-      y = 1;
-
+/*
+    if (command_finish) {
+    unsigned long tm = millis();
+    flight_data.print("time(ms): ");
+    flight_data.println(tm);
+    Serial.println("data writen");
+    led_blink();
     }
 
-    if ( digitalRead(barrel_roll_pin) == HIGH) {
-      transmit_code(2);
-      start_time = millis();
-      y = 2;
-    }
 
-    if ( digitalRead(takeoff_pin) == HIGH) {
-      transmit_code(3);
-      start_time = millis();
-      y = 3;
-    }
-
-  }
-  else {
-    request_acknowledge();
-    finish_time = millis();
-    unsigned long lag = finish_time - start_time;
-    Serial.print("lag: ");
-    Serial.println(lag);
-    flight_data.print("command code: ");
-    flight_data.println(y);
-    flight_data.print("lag(ms): ");
-    flight_data.println(lag);
+    if(digitalRead(flip_pin) == HIGH){
+    digitalWrite(13, HIGH);
+    command_finish = false;
     flight_data.close();
-  }
-    
-
-
-
-
-  // led_blink();
-  // gyro_update();
-  // velocity_update();
+    }
+  */
   /*
-    Serial.print("gyro roll: "); Serial.println(gyro_roll);
-    Serial.print("gyro pitch: "); Serial.println(gyro_pitch);
-    //Serial.print("gyro yaw: "); Serial.println(gyro_yaw);
-    Serial.println("");
+      if (command_finish) {
+        flight_data = SD.open("flight_data.txt", FILE_WRITE);
+        if ( digitalRead(flip_pin) == HIGH) {
+         // transmit_code(1);
+          start_time = millis();
+          y = 1;
+
+        }
+
+        if ( digitalRead(barrel_roll_pin) == HIGH) {
+        //  transmit_code(2);
+          start_time = millis();
+          y = 2;
+        }
+
+        if ( digitalRead(takeoff_pin) == HIGH) {
+          transmit_code(3);
+          start_time = millis();
+          y = 3;
+        }
+
+      }
+      else {
+        request_acknowledge();
+        finish_time = millis();
+        unsigned long lag = finish_time - start_time;
+        Serial.print("lag: ");
+        Serial.println(lag);
+        flight_data.print("command code: ");
+        flight_data.println(y);
+        flight_data.print("lag(ms): ");
+        flight_data.println(lag);
+        flight_data.close();
+      }
+
   */
 
 
+
+  //led_blink();
+  gyro_update();
+  velocity_update();
+
+  if (int(millis() - start_time) > 500) {
+    Serial.print("gyro roll: "); Serial.println(gyro_roll);
+    Serial.print("gyro pitch: "); Serial.println(gyro_pitch);
+    Serial.print("gyro yaw: "); Serial.println(gyro_yaw);
+    start_time = millis();
+  }
+
 }
+
+
 /*
    paramiters to transmit
     1 - data(1) or command(2)
