@@ -105,6 +105,7 @@ void caculateAngle()
 
 void displayGyroAccel() 
 {
+ if(int(millis()) -startTime >= 500){
    Serial.print(roll_angle);
     Serial.print(",");
   Serial.print(pitch_angle);
@@ -121,6 +122,7 @@ void displayGyroAccel()
     Serial.print(",");
   Serial.println(gForceZ);
   startTime = micros();
+ }
 }
 
 void setup() 
