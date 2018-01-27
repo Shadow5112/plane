@@ -1,15 +1,21 @@
-
+#include<SD.h>; 
+#include<SPI.h>;
 #include <Wire.h>
 
 long accelX, accelY, accelZ;
 float gForceX, gForceY, gForceZ;
-
-long gyroX, gyroY, gyroZ;
+ 
+long gyroX, gyroY, gyroZ,gyro_cal_x,gyro_cal_y,gyro_cal_z;
 float rotX, rotY, rotZ;
+
+float pitch_angle,roll_angle,acc_vector;
+int startTime = 0;
+
+int chipSelect = 4; //Set ChipSelect to pin 4
+File MPUdata; // Variable for file data
 
 void setupMPU()
 {
-
   Wire.beginTransmission(0b1101000); //Access the I2C address for the MPU
   Wire.write(0x6B); //Accessing Power Management Register
   Wire.write(0b00000000); // Turning off sleep setting
@@ -26,6 +32,24 @@ void setupMPU()
   Wire.endTransmission(); 
 
 }
+
+void config_MPU()
+{
+  Wire.beginTransmission(0b1101000);// Access the I2C address for the MPU
+  Wire.write(0x3B);
+  Wire.endTransmission();
+  Wire.requestFrom(0b1101000,12);
+  while(Wire.available() < 12)
+  {
+  accelX = Wire.read()<<8|Wire.read();                                  
+  accelY = Wire.read()<<8|Wire.read();                                  
+  accelZ = Wire.read()<<8|Wire.read();                                                                     
+  gyroX = Wire.read()<<8|Wire.read();                                 
+  gyroY = Wire.read()<<8|Wire.read();                                 
+  gyroZ = Wire.read()<<8|Wire.read();  
+  }  
+}
+
 void recordAccelData() 
 {
 
@@ -39,7 +63,7 @@ void recordAccelData()
   accelX = Wire.read()<<8|Wire.read(); //Store data for accelX
   accelY = Wire.read()<<8|Wire.read(); //Store data for accelY
   accelZ = Wire.read()<<8|Wire.read(); //Store data for accelZ
-  convertAccelData();
+ 
 }
 
 void convertAccelData()
@@ -63,8 +87,6 @@ void recordGyroData()
   gyroY = Wire.read()<<8|Wire.read(); //Store data for accelY
   gyroZ = Wire.read()<<8|Wire.read(); //Store data for accelZ
   
-  convertGyroData();
-
 }
 
 void convertGyroData() 
@@ -74,36 +96,96 @@ void convertGyroData()
   rotZ = gyroZ / 131.0; // Converts for Raw data to Deg/s 
 }
 
+void caculateAngle()
+{
+  acc_vector = sqrt ((accelX*accelX) + (accelY*accelY) + (accelZ*accelZ)); // Calc Accel vector 
+  roll_angle = asin(accelX/acc_vector)*(180.0/3.14);// Calc roll angle
+  pitch_angle = asin(accelY/acc_vector)*(180.0/3.14);// Calc pitch angle
+}
+
 void displayGyroAccel() 
 {
-  Serial.print("Gyro (deg/sec)");
-  Serial.print(" X=");
+   Serial.print(roll_angle);
+    Serial.print(",");
+  Serial.print(pitch_angle);
+    Serial.print(",");
   Serial.print(rotX);
-  Serial.print(" Y=");
+    Serial.print(",");
   Serial.print(rotY);
-  Serial.print(" Z=");
+    Serial.print(",");
   Serial.print(rotZ);
-  Serial.print(" Accel (gForce)");
-  Serial.print(" X=");
+    Serial.print(",");
   Serial.print(gForceX);
-  Serial.print(" Y=");
+    Serial.print(",");
   Serial.print(gForceY);
-  Serial.print(" Z=");
+    Serial.print(",");
   Serial.println(gForceZ);
+  startTime = micros();
 }
 
 void setup() 
 {
   Serial.begin(9600);
+  Serial.print("Roll");
+  Serial.print(",");
+  Serial.print("Pitch");
+  Serial.print(",");
+  Serial.print("GyroX");
+  Serial.print(",");
+  Serial.print("GyroY");
+  Serial.print(",");
+  Serial.print("GyroZ");
+  Serial.print(",");
+  Serial.print("AccelX");
+  Serial.print(",");
+  Serial.print("AccelY");
+  Serial.print(",");
+  Serial.println("AccelZ");
   Wire.begin();
   setupMPU();
+  config_MPU();
+   
+  pinMode(10,OUTPUT); // Pin 10 initialized to Output
+  SD.begin(chipSelect); // Initialize the SD with ChipSelect
+  for(int i; i<1000; i++)
+  {
+    gyro_cal_x += gyroX;
+    gyro_cal_y += gyroY;
+    gyro_cal_z += gyroZ;
+    delay(10);
+        
+  }
+
+  gyro_cal_x /= 1000;
+  gyro_cal_y /= 1000;
+  gyro_cal_z /= 1000;
+   
 }
 
 void loop() 
 {
-  recordAccelData();
+ 
   recordGyroData();
+  gyroX -= gyro_cal_x;
+  gyroY -= gyro_cal_y;
+  gyroZ -= gyro_cal_z;
+  convertGyroData();
+  recordAccelData();
+  caculateAngle();
+  convertAccelData();
   displayGyroAccel();
-  delay(1000);
-
+  
+  MPUdata = SD.open("MPUdata.txt",FILE_WRITE);// Create a Write Only file on SD and open it.
+  if(MPUdata) // Only do if data file opens sucessfully 
+{
+    Serial.println("File opened sucessfully");
+    MPUdata.print(gForceX);
+    MPUdata.print(",");
+    MPUdata.print(gForceY);
+    MPUdata.print(",");
+    MPUdata.println(gForceZ);
+    MPUdata.close();  
+    delay(500);
+  } 
+  
 }
