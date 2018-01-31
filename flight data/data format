@@ -1,0 +1,19 @@
+    Serial.println("File opened sucessfully");
+    MPUdata.print(roll_angle);
+    MPUdata.print(",");
+    MPUdata.print(pitch_angle);
+    MPUdata.print(",");
+    MPUdata.print(gForceX);// multiples of g
+    MPUdata.print(",");
+    MPUdata.print(gForceY);
+    MPUdata.print(",");
+    MPUdata.print(gForceZ);
+    MPUdata.print(",");
+    MPUdata.print(rotX); // angular velocity
+    MPUdata.print(",");
+    MPUdata.print(rotY);
+    MPUdata.print(",");
+    MPUdata.print(rotZ);
+    MPUdata.print(",");
+    MPUdata.println(millis());
+    MPUdata.close();
