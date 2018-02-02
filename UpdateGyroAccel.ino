@@ -180,14 +180,29 @@ void loop()
   MPUdata = SD.open("MPUdata.txt",FILE_WRITE);// Create a Write Only file on SD and open it.
   if(MPUdata) // Only do if data file opens sucessfully 
 {
-    Serial.println("File opened sucessfully");
-    MPUdata.print(gForceX);
-    MPUdata.print(",");
-    MPUdata.print(gForceY);
-    MPUdata.print(",");
-    MPUdata.println(gForceZ);
-    MPUdata.close();  
-    delay(500);
+if (int(millis() - startTime) > 100)
+    {
+      Serial.println("File opened sucessfully");
+      MPUdata.print(roll_angle);
+      MPUdata.print(",");
+      MPUdata.print(pitch_angle);
+      MPUdata.print(",");
+      MPUdata.print(gForceX);
+      MPUdata.print(",");
+      MPUdata.print(gForceY);
+      MPUdata.print(",");
+      MPUdata.print(gForceZ);
+      MPUdata.print(",");
+      MPUdata.print(rotX);
+      MPUdata.print(",");
+      MPUdata.print(rotY);
+      MPUdata.print(",");
+      MPUdata.print(rotZ);
+      MPUdata.print(",");
+      MPUdata.println(millis());
+      MPUdata.close();
+     startTime = millis();
+    }
   } 
   
 }
