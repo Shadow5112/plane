@@ -8,9 +8,12 @@ float gForceX, gForceY, gForceZ;
 long gyroX, gyroY, gyroZ, gyro_cal_x, gyro_cal_y, gyro_cal_z;
 float rotX, rotY, rotZ;
 
-float pitch_angle, roll_angle, acc_vector;
-unsigned long startTime = 0;
+float pitch_angle, roll_angle, yaw_angle, acc_vector;
+unsigned long print_timer = 0;
+unsigned long gyro_timer = 0;
+unsigned long accel_timer = 0;
 
+int num_files = 3; // number of files that will be created
 String file_1 = ("AccelData.txt");
 String file_2 = ("GyroData.txt");
 String file_3 = ("Orientaion.txt");
@@ -29,6 +32,7 @@ void convertGyroData();
 void caculateAngle();
 void displayGyroAccel();
 void writeData(int);
+void update_velocity();
 
 void setup()
 {
@@ -55,7 +59,9 @@ void setup()
   pinMode(10, OUTPUT); // Pin 10 initialized to Output
   SD.begin(chipSelect); // Initialize the SD with ChipSelect
   for (int i; i < 1000; i++)
-  {
+    recordGyroData();
+    convertGyroData();
+
     gyro_cal_x += gyroX;
     gyro_cal_y += gyroY;
     gyro_cal_z += gyroZ;
@@ -81,14 +87,15 @@ void loop()
   caculateAngle();
   convertAccelData();
   displayGyroAccel();
+  update_velocity();
 
-  if (int(millis() - startTime) > 100)
+  if (int(millis() - print_timer) > 100)
   {
-    for (int x = 1; x <= 3; x++) {
+    for (int x = 1; x <= num_files; x++) {
       writeData(x);
     }
 
-    startTime = millis();
+    print_timer = millis();
   }
 
 }
@@ -229,13 +236,32 @@ void convertGyroData()
 void caculateAngle()
 {
   acc_vector = sqrt ((accelX * accelX) + (accelY * accelY) + (accelZ * accelZ)); // Calc Accel vector
-  roll_angle = asin(accelX / acc_vector) * (180.0 / 3.14); // Calc roll angle
-  pitch_angle = asin(accelY / acc_vector) * (180.0 / 3.14); // Calc pitch angle
+
+  float acc_roll_angle = asin(accelX / acc_vector) * (180.0 / 3.14); // Calc roll angle
+  float  acc_pitch_angle = asin(accelY / acc_vector) * (180.0 / 3.14); // Calc pitch angle
+
+  unsigned long sample_time = millis() - gyro_timer; // calculate time since angle was last calculated in ms
+  float delta_pitch = rotX * sample_time / 1000; // convert to ms to s and find angle moved sincce last measument
+  float delta_roll = rotY * sample_time / 1000;
+  float delta_yaw = rotZ * sample_time / 1000;
+
+  roll_angle += delta_roll; // add change in angle to total angle
+  pitch_angle += delta_pitch;
+  yaw_angle += delta_yaw;
+
+  pitch_angle += roll_angle * sin(yaw_angle * 0.000001066);
+  roll_angle -= pitch_angle * sin(yaw_angle * 0.000001066);
+  
+  roll_angle = roll_angle * 0.96 + acc_roll_angle * 0.04; // buffer gyroscope with acccerometer data
+  pitch_angle = pitch_angle * 0.94 + acc_roll_angle * 0.04;
+
+
+  gyro_timer = millis();
 }
 
 void displayGyroAccel()
 {
-  if (int(millis()) - startTime >= 500) {
+  if (int(millis()) - print_timer >= 500) {
     Serial.print(roll_angle);
     Serial.print(",");
     Serial.print(pitch_angle);
@@ -251,6 +277,6 @@ void displayGyroAccel()
     Serial.print(gForceY);
     Serial.print(",");
     Serial.println(gForceZ);
-    startTime = micros();
+    print_timer = millis();
   }
 }
