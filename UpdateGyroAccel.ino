@@ -1,6 +1,7 @@
 #include<SD.h>
 #include<SPI.h>
 #include <Wire.h>
+#include <Servo.h>
 
 long accelX, accelY, accelZ;
 float gForceX, gForceY, gForceZ;
@@ -8,10 +9,65 @@ float gForceX, gForceY, gForceZ;
 long gyroX, gyroY, gyroZ, gyro_cal_x, gyro_cal_y, gyro_cal_z;
 float rotX, rotY, rotZ;
 
+float vel;
+
 float pitch_angle, roll_angle, yaw_angle, acc_vector;
 unsigned long print_timer = 0;
+unsigned long print_timer_2 = 0;
 unsigned long gyro_timer = 0;
 unsigned long accel_timer = 0;
+
+int rudder_in; // assign pin number for rudder
+int rudder_out;
+
+
+int throttle_in; // assign pin number for throttle
+int throttle_out;
+
+int auto_pilot_pin; // assign pin nuber for auto pilot inturupt function - must be digital pin
+int flip_pin;
+int barrel_roll_pin;
+int land_pin;
+int takeoff_pin = 10;
+
+//declare servo variables
+Servo  rudder_servo,
+       throttle_servo,
+       aileron_l_servo,
+       aileron_r_servo,
+       elevator_l_servo,
+       elevator_r_servo;
+
+// declare initial possition of each servo in degrees
+
+int rudder_start;
+int throttle_start;
+int aileron_l_start;
+int aileron_r_start;
+int elevator_r_start;
+int elevator_l_start;
+//declare maximum and minimum servo angles in degrees
+
+
+int rudder_max;
+int rudder_min;
+
+int throttle_max;
+int throttle_min;
+
+
+// declare all nesicary functions
+void manual(); //declare inturupt function
+
+//declare auto pilot functions
+void barrel_roll();
+void land();
+void takeoff();
+void flip(); //backwards loop
+
+float altitude(); // returns altitude with ultrasonc sensor. Range = 4.5 meters
+
+void stabalize();
 
 int num_files = 3; // number of files that will be created
 String file_1 = ("AccelData.txt");
@@ -37,6 +93,7 @@ void update_velocity();
 void setup()
 {
   Serial.begin(9600);
+  /*
   Serial.print("Roll");
   Serial.print(",");
   Serial.print("Pitch");
@@ -52,6 +109,7 @@ void setup()
   Serial.print("AccelY");
   Serial.print(",");
   Serial.println("AccelZ");
+  */
   Wire.begin();
   setupMPU();
   config_MPU();
@@ -67,7 +125,7 @@ void setup()
     gyro_cal_y += gyroY;
     gyro_cal_z += gyroZ;
     delay(10);
-  
+
   }
 
   gyro_cal_x /= 1000;
@@ -101,57 +159,12 @@ void loop()
 
 }
 
-void writeData(int file_name) {
-  switch (file_name) {
-    case 1:
-      accel_data = SD.open(file_1, FILE_WRITE);
-      if(accel_data){
-      accel_data.print(gForceX);
-      accel_data.print(",");
-      accel_data.print(gForceY);
-      accel_data.print(",");
-      accel_data.print(gForceZ);
-      accel_data.print(",");
-      accel_data.print(millis());
-      accel_data.println(",");
-      accel_data.close();
-      }
-      break;
-
-    case 2:
-      gyro_data = SD.open(file_2, FILE_WRITE);
-      if(gyro_data){
-      gyro_data.print(rotX);
-      gyro_data.print(",");
-      gyro_data.print(rotY);
-      gyro_data.print(",");
-      gyro_data.print(rotZ);
-      gyro_data.print(",");
-      gyro_data.print(millis());
-      gyro_data.println(",");
-      gyro_data.close();
-      }
-      break;
-
-    case 3:
-      orientation_data = SD.open(file_3, FILE_WRITE);
-      if(orientation_data){
-      orientation_data.print(roll_angle);
-      orientation_data.print(",");
-      orientation_data.print(pitch_angle);
-      orientation_data.print(",");
-      orientation_data.print(millis());
-      orientation_data.println(",");
-      orientation_data.close();
-      }
-      break;
-
-    default:
-      break;
+void update_velocity() {
 
 
-  }
+  //vel += ;
 }
+
 void setupMPU()
 {
   Wire.beginTransmission(0b1101000); //Access the I2C address for the MPU
@@ -221,9 +234,9 @@ void recordGyroData()
 
   while (Wire.available() < 6);
 
-  gyroX = Wire.read() << 8 | Wire.read(); //Store data for accelX
-  gyroY = Wire.read() << 8 | Wire.read(); //Store data for accelY
-  gyroZ = Wire.read() << 8 | Wire.read(); //Store data for accelZ
+  gyroX = Wire.read() << 8 | Wire.read(); //Store data for gyroX
+  gyroY = Wire.read() << 8 | Wire.read(); //Store data for gyroY
+  gyroZ = Wire.read() << 8 | Wire.read(); //Store data for gyroZ
 
 }
 
@@ -236,6 +249,8 @@ void convertGyroData()
 
 void caculateAngle()
 {
+
+
   acc_vector = sqrt ((accelX * accelX) + (accelY * accelY) + (accelZ * accelZ)); // Calc Accel vector
 
   float acc_roll_angle = asin(accelX / acc_vector) * (180.0 / 3.14); // Calc roll angle
@@ -262,7 +277,7 @@ void caculateAngle()
 
 void displayGyroAccel()
 {
-  if (int(millis()) - print_timer >= 500) {
+  if (int(millis()) - print_timer_2 >= 500) {
     Serial.print(roll_angle);
     Serial.print(",");
     Serial.print(pitch_angle);
@@ -278,6 +293,57 @@ void displayGyroAccel()
     Serial.print(gForceY);
     Serial.print(",");
     Serial.println(gForceZ);
-    print_timer = millis();
+    print_timer_2 = millis();
+  }
+}
+
+void writeData(int file_name) {
+  switch (file_name) {
+    case 1:
+      accel_data = SD.open(file_1, FILE_WRITE);
+      if (accel_data) {
+        accel_data.print(gForceX);
+        accel_data.print(",");
+        accel_data.print(gForceY);
+        accel_data.print(",");
+        accel_data.print(gForceZ);
+        accel_data.print(",");
+        accel_data.print(millis());
+        accel_data.println(",");
+        accel_data.close();
+      }
+      break;
+
+    case 2:
+      gyro_data = SD.open(file_2, FILE_WRITE);
+      if (gyro_data) {
+        gyro_data.print(rotX);
+        gyro_data.print(",");
+        gyro_data.print(rotY);
+        gyro_data.print(",");
+        gyro_data.print(rotZ);
+        gyro_data.print(",");
+        gyro_data.print(millis());
+        gyro_data.println(",");
+        gyro_data.close();
+      }
+      break;
+
+    case 3:
+      orientation_data = SD.open(file_3, FILE_WRITE);
+      if (orientation_data) {
+        orientation_data.print(roll_angle);
+        orientation_data.print(",");
+        orientation_data.print(pitch_angle);
+        orientation_data.print(",");
+        orientation_data.print(millis());
+        orientation_data.println(",");
+        orientation_data.close();
+      }
+      break;
+
+    default:
+      break;
+
   }
 }
