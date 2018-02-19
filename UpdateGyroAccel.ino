@@ -1,5 +1,5 @@
-#include<SD.h>;
-#include<SPI.h>;
+#include<SD.h>
+#include<SPI.h>
 #include <Wire.h>
 
 long accelX, accelY, accelZ;
@@ -59,6 +59,7 @@ void setup()
   pinMode(10, OUTPUT); // Pin 10 initialized to Output
   SD.begin(chipSelect); // Initialize the SD with ChipSelect
   for (int i; i < 1000; i++)
+  {
     recordGyroData();
     convertGyroData();
 
@@ -66,7 +67,7 @@ void setup()
     gyro_cal_y += gyroY;
     gyro_cal_z += gyroZ;
     delay(10);
-
+  
   }
 
   gyro_cal_x /= 1000;
