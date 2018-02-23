@@ -3,7 +3,6 @@
 #include <Wire.h>
 #include <Servo.h>
 
-
 long accelX, accelY, accelZ;
 float gForceX, gForceY, gForceZ;
 
@@ -13,6 +12,7 @@ float rotX, rotY, rotZ;
 float vel;
 
 float pitch_angle, roll_angle, yaw_angle, acc_vector;
+
 unsigned long print_timer = 0;
 unsigned long print_timer_2 = 0;
 
@@ -22,8 +22,14 @@ int rudder_out = 9;
 int throttle_in; // assign pin number for throttle
 int throttle_out;
 
-int auto_pilot_pin; // assign pin nuber for auto pilot inturupt function - must be digital pin
-int flip_pin;
+int aileron_in; // assign pin for ailerons
+int aileron_out;
+
+int elevator_in;// assign pin for elevators
+int elevator_out;
+
+int auto_pilot_pin; // assign pin nuber for auto pilot function 
+int flip_pin;       //inturupt must be on digital pin
 int barrel_roll_pin;
 int land_pin;
 int takeoff_pin;
@@ -31,41 +37,20 @@ int takeoff_pin;
 //declare servo variables
 Servo  rudder_servo,
        throttle_servo,
-       aileron_l_servo,
-       aileron_r_servo,
-       elevator_l_servo,
-       elevator_r_servo;
+       aileron_servo,
+       elevator_servo;
 
 // declare initial possition of each servo in degrees
 
 int rudder_start;
 int throttle_start;
-int aileron_l_start;
-int aileron_r_start;
-int elevator_r_start;
-int elevator_l_start;
+int aileron_start;
+int elevator_start;
 //declare maximum and minimum servo angles in degrees
 
 
-int rudder_max;
-int rudder_min;
-
-int throttle_max;
-int throttle_min;
-
-
-// declare all nesicary functions
-void manual(); //declare inturupt function
-
-//declare auto pilot functions
-void barrel_roll();
-void land();
-void takeoff();
-void flip(); //backwards loop
-
-float altitude(); // returns altitude with ultrasonc sensor. Range = 4.5 meters
-
-void stabalize();
+int servo_max = 150; //max and min angle for all servos
+int servo_min = 30;
 
 int num_files = 3; // number of files that will be created
 String file_1 = ("Accel.txt");
@@ -77,6 +62,10 @@ File accel_data; // Variable for file data
 File gyro_data;
 File orientation_data;
 
+// declare all nesicary functions
+void manual(); //declare inturupt function
+
+//declare data functions
 void setupMPU();
 void config_MPU();
 void recordAccelData();
@@ -87,29 +76,19 @@ void caculateAngle();
 void displayGyroAccel();
 void writeData();
 void update_velocity();
+
+//declare auto pilot functions
+void barrel_roll();
+void land();
+void takeoff();
+void flip(); //backwards loop
 void balance();
+
 
 void setup()
 {
+ Serial.begin(9600);
 
-  Serial.begin(9600);
-  /*
-    Serial.print("Roll");
-    Serial.print(",");
-    Serial.print("Pitch");
-    Serial.print(",");
-    Serial.print("GyroX");
-    Serial.print(",");
-    Serial.print("GyroY");
-    Serial.print(",");
-    Serial.print("GyroZ");
-    Serial.print(",");
-    Serial.print("AccelX");
-    Serial.print(",");
-    Serial.print("AccelY");
-    Serial.print(",");
-    Serial.println("AccelZ");
-  */
   Wire.begin();
   setupMPU();
   config_MPU();
@@ -124,7 +103,7 @@ void setup()
     gyro_cal_x += gyroX;
     gyro_cal_y += gyroY;
     gyro_cal_z += gyroZ;
-    delay(10);
+    delay(3);
     /*  Serial.print(gyro_cal_x);
       Serial.print(" ");
       Serial.print(gyro_cal_y);
@@ -142,7 +121,28 @@ void setup()
   Serial.print(" ");
   Serial.println(gyro_cal_z);
 
-  rudder_servo.attach(rudder_out);
+
+  pinMode(rudder_in, INPUT); // inisialize  pinmodes for commands from the reciever
+  pinMode(throttle_in, INPUT);
+  pinMode(aileron_in, INPUT);
+  pinMode(elevator_in, INPUT);
+  pinMode(auto_pilot_pin, INPUT);
+  pinMode(flip_pin, INPUT);
+  pinMode(barrel_roll_pin, INPUT);
+  pinMode(land_pin, INPUT);
+  pinMode(takeoff_pin, INPUT);
+  pinMode(land_pin, INPUT);
+  
+  rudder_servo.attach(rudder_out); //attach servo objects to pins
+  aileron_servo.attach(aileron_out);
+  elevator_servo.attach(elevator_out);
+  throttle_servo.attach(throttle_out);
+
+  rudder_servo.write(rudder_start); // set servos to start values
+  aileron_servo.write(aileron_start);
+  elevator_servo.write(elevator_start);
+  throttle_servo.write(throttle_start);
+ 
 }
 
 void loop()
@@ -375,14 +375,14 @@ void balance()
 
 int checkAngle(int x)
 {
-  if (x < 20)
+  if (x < servo_min)
   {
-    return 20;
+    return servo_min;
   }
 
-  else if (x > 165)
+  else if (x > servo_max)
   {
-    return 165;
+    return servo_max;
   }
 
   else
