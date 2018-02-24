@@ -3,6 +3,20 @@
 #include <Wire.h>
 #include <Servo.h>
 
+/*
+ * SD card pins 
+ *      mega 2560
+ *        MOSI - 51
+ *        MISO - 50
+ *        SCK - 52
+ *      uno
+ *        MOSI - 11
+ *        MISO - 12
+ *        SCK - 13
+ *        
+ *        CS / chip select - digital pin
+ */
+
 long accelX, accelY, accelZ;
 float gForceX, gForceY, gForceZ;
 
