@@ -30,6 +30,12 @@ float pitch_angle, roll_angle, yaw_angle, acc_vector;
 unsigned long print_timer = 0;
 unsigned long print_timer_2 = 0;
 
+///
+///PINS
+///
+
+int chipSelect = 4; //Set ChipSelect for sd card reader to pin 4
+
 int rudder_in; // assign pin number for rudder
 int rudder_out = 9;
 
@@ -42,17 +48,26 @@ int aileron_out;
 int elevator_in;// assign pin for elevators
 int elevator_out;
 
-int auto_pilot_pin; // assign pin nuber for auto pilot function 
+int auto_pin; // assign pin nuber for auto pilot function
 int flip_pin;       //inturupt must be on digital pin
 int barrel_roll_pin;
 int land_pin;
 int takeoff_pin;
+
+///
+///PINS
+///
+
 
 //declare servo variables
 Servo  rudder_servo,
        throttle_servo,
        aileron_servo,
        elevator_servo;
+
+///
+///INITIAL VAlUES
+///
 
 // declare initial possition of each servo in degrees
 
@@ -66,18 +81,24 @@ int elevator_start;
 int servo_max = 150; //max and min angle for all servos
 int servo_min = 30;
 
+///
+///INITIAL VALIUES
+///
+
 int num_files = 3; // number of files that will be created
 String file_1 = ("Accel.txt");
 String file_2 = ("Gyro.txt");
 String file_3 = ("Orien.txt");
 
-int chipSelect = 4; //Set ChipSelect to pin 4
 File accel_data; // Variable for file data
 File gyro_data;
 File orientation_data;
 
+///
+///FUNCTIONS
+///
+
 // declare all nesicary functions
-void manual(); //declare inturupt function
 
 //declare data functions
 void setupMPU();
@@ -97,7 +118,11 @@ void land();
 void takeoff();
 void flip(); //backwards loop
 void balance();
+void manuel();
 
+///
+///FUNCTIONS
+///
 
 void setup()
 {
@@ -140,7 +165,7 @@ void setup()
   pinMode(throttle_in, INPUT);
   pinMode(aileron_in, INPUT);
   pinMode(elevator_in, INPUT);
-  pinMode(auto_pilot_pin, INPUT);
+  pinMode(auto_pin, INPUT);
   pinMode(flip_pin, INPUT);
   pinMode(barrel_roll_pin, INPUT);
   pinMode(land_pin, INPUT);
@@ -186,6 +211,13 @@ void loop()
     writeData();
     print_timer = millis();
   }
+     if (auto_pin == LOW){
+    
+  }
+  else{
+    manuel();
+  }
+       
 }
 
 void update_velocity() {
@@ -405,7 +437,14 @@ int checkAngle(int x)
   }
 }
 
-  
+  void manuel() {
+  analogWrite(aileron_out, analogRead(aileron_in));
+  analogWrite(aileron_out, analogRead(aileron_in));
+  analogWrite(elevator_out, analogRead(elevator_in));
+  analogWrite(rudder_out, analogRead(rudder_in));
+  analogWrite(throttle_out, analogRead(throttle_in));
+}
+
 
 
 
