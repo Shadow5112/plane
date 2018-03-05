@@ -148,7 +148,25 @@ void setup()
 
   pinMode(10, OUTPUT); // Pin 10 initialized to Output
   SD.begin(chipSelect); // Initialize the SD with ChipSelect
- ///// Calibrate gyro/accel ////////////
+ 
+    if(!gyro.init()){
+    Serial.println("Failed  to autodetect gyro type");
+    while(1);  
+  }
+
+  if(!compass.init()){
+    Serial.println("failed to detect compass");
+  }
+
+  if(!ps.init()){
+    Serial.println("failed to detect presure sensor");
+    while(1);
+  }
+  ps.enableDefault();
+  gyro.enableDefault();
+  compass.enableDefault();
+   
+   ///// Calibrate gyro/accel ////////////
    for (int i = 0; i < 1000; i++)
   {
     recordGyroData();
@@ -210,24 +228,7 @@ void setup()
   aileron_servo.write(aileron_start);
   elevator_servo.write(elevator_start);
   throttle_servo.write(throttle_start);
-
-    if(!gyro.init()){
-    Serial.println("Failed  to autodetect gyro type");
-    while(1);  
-  }
-
-  if(!compass.init()){
-    Serial.println("failed to detect compass");
-  }
-
-  if(!ps.init()){
-    Serial.println("failed to detect presure sensor");
-    while(1);
-  }
-  ps.enableDefault();
-  gyro.enableDefault();
-  compass.enableDefault();
-
+   
   calibrateAlt();
 
   Serial.println("Setup Complete");
@@ -254,7 +255,6 @@ void loop()
   caculateAngle();
   convertAccelData();
   displayData();
-  update_velocity();
   balance();
 
   if (int(millis() - print_timer) > 100)
