@@ -15,7 +15,7 @@ LPS ps;
 long accelX, accelY, accelZ;
 float gForceX, gForceY, gForceZ;
 
-long gyroX, gyroY, gyroZ, gyro_cal_x, gyro_cal_y, gyro_cal_z;
+long gyroX, gyroY, gyroZ, gyro_cal_x, gyro_cal_y, gyro_cal_z, accel_cal_x, accel_cal_y, accel_cal_z;
 float rotX, rotY, rotZ;
 
 float alt, alt_offset;
@@ -63,7 +63,47 @@ void setup() {
   compass.enableDefault();
 
   calibrateAlt();
+ ///// Calibrate gyro/accel ////////////
+   for (int i = 0; i < 1000; i++)
+  {
+    recordGyroData();
+    convertGyroData();
 
+    gyro_cal_x += gyroX;
+    gyro_cal_y += gyroY;
+    gyro_cal_z += gyroZ;
+    
+    accel_cal_x += accelX;
+    accel_cal_y += accelY;
+    accel_cal_z += accelZ;  
+     
+     delay(3);
+    /*  Serial.print(gyro_cal_x);
+      Serial.print(" ");
+      Serial.print(gyro_cal_y);
+      Serial.print(" ");
+      Serial.println(gyro_cal_z);
+    */
+  }
+  
+  accel_cal_x /= 1000.0
+  accel_cal_y /= 1000.0
+  accel_cal_z /= 1000.0
+    
+  gyro_cal_x /= 1000.0;
+  gyro_cal_y /= 1000.0;
+  gyro_cal_z /= 1000.0;
+  Serial.print(gyro_cal_x);
+  Serial.print(" ");
+  Serial.print(gyro_cal_y);
+  Serial.print(" ");
+  Serial.println(gyro_cal_z);
+
+  accel_cal_x += accelX;
+  accel_cal_y += accelY;
+  accel_cal_z += accelZ;
+  
+////////////////////////////////////
   Serial.println("Setup Complete");
   Serial.println(alt_offset);
 }
