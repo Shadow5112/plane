@@ -9,7 +9,7 @@
 
 L3G gyro;
 LSM303 compass;
-LSM303::vector<int16_t> running_min = {32767, 32767, 32767}, running_max = {-32768, -32768, -32768}; 
+LSM303::vector<int16_t> running_min = {32767, 32767, 32767}, running_max = { -32768, -32768, -32768};
 LPS ps;
 
 /*
@@ -26,6 +26,9 @@ LPS ps;
           CS / chip select - digital pin
 */
 
+///
+///Variables
+///
 long accelX, accelY, accelZ;
 float gForceX, gForceY, gForceZ;
 
@@ -39,6 +42,28 @@ float pitch_angle, roll_angle, yaw_angle, acc_vector;
 
 unsigned long print_timer = 0;
 unsigned long print_timer_2 = 0;
+
+//declare servo variables
+Servo  rudder_servo,
+       throttle_servo,
+       aileron_servo,
+       elevator_servo;
+       
+int num_files = 3; // number of files that will be created
+bool first_print = true;
+String file_1 = ("Accel.txt");
+String file_2 = ("Gyro.txt");
+String file_3 = ("Orien.txt");
+String file_4 = ("Servo.txt");
+
+File accel_data; // Variable for file data
+File gyro_data;
+File orientation_data;
+File servo_data;
+
+///
+///
+///
 
 ///
 ///PINS
@@ -65,15 +90,8 @@ int land_pin;
 int takeoff_pin;
 
 ///
-///PINS
 ///
-
-
-//declare servo variables
-Servo  rudder_servo,
-       throttle_servo,
-       aileron_servo,
-       elevator_servo;
+///
 
 ///
 ///INITIAL VAlUES
@@ -87,32 +105,25 @@ int aileron_start;
 int elevator_start;
 //declare maximum and minimum servo angles in degrees
 
-
 int servo_max = 150; //max and min angle for all servos
 int servo_min = 30;
 
 ///
-///INITIAL VALIUES
+///
 ///
 
-int num_files = 3; // number of files that will be created
-String file_1 = ("Accel.txt");
-String file_2 = ("Gyro.txt");
-String file_3 = ("Orien.txt");
-
-File accel_data; // Variable for file data
-File gyro_data;
-File orientation_data;
 
 ///
 ///FUNCTIONS
 ///
 
-// declare all nesicary functions
-
-//declare data functions
+// setup functions
 void setupMPU();
 void config_MPU();
+void calibrateAccel();
+void calilbrateAlt();
+
+//data functions
 void recordAccelData();
 void convertAccelData();
 void recordGyroData();
@@ -121,8 +132,10 @@ void caculateAngle();
 void displayGyroAccel();
 void writeData();
 void update_velocity();
+float readAlt();
+void displayData();
 
-//declare auto pilot functions
+//auto pilot functions
 void barrel_roll();
 void land();
 void takeoff();
@@ -130,61 +143,59 @@ void flip(); //backwards loop
 void balance();
 void manuel();
 
-void displayData();
-void calibrateAccel();
-void calilbrateAlt();
-float readAlt();
-
 ///
-///FUNCTIONS
+///
 ///
 
 void setup()
 {
 
   Serial.begin(9600);
-
   Wire.begin();
 
   pinMode(10, OUTPUT); // Pin 10 initialized to Output
   SD.begin(chipSelect); // Initialize the SD with ChipSelect
- 
-    if(!gyro.init()){
+
+  //Setup AltIMU
+  //
+  if (!gyro.init()) {
     Serial.println("Failed  to autodetect gyro type");
-    while(1);  
+    while (1);
   }
 
-  if(!compass.init()){
+  if (!compass.init()) {
     Serial.println("failed to detect compass");
   }
 
-  if(!ps.init()){
+  if (!ps.init()) {
     Serial.println("failed to detect presure sensor");
-    while(1);
   }
   ps.enableDefault();
   gyro.enableDefault();
   compass.enableDefault();
-   
-   ///// Calibrate gyro/accel ////////////
-   for (int i = 0; i < 1000; i++)
+  calibrateAlt();
+  ///
+  ///
+
+  //
+  //calibrate gyroscope
+  for (int i = 0; i < 1000; i++)
   {
     recordGyroData();
     convertGyroData();
 
     gyro_cal_x += gyroX;
     gyro_cal_y += gyroY;
-    gyro_cal_z += gyroZ;  
-     
-     delay(3);
-    /*  Serial.print(gyro_cal_x);
-      Serial.print(" ");
-      Serial.print(gyro_cal_y);
-      Serial.print(" ");
-      Serial.println(gyro_cal_z);
-    */
+    gyro_cal_z += gyroZ;
+    delay(3);
+    Serial.print(gyro_cal_x);
+    Serial.print(" ");
+    Serial.print(gyro_cal_y);
+    Serial.print(" ");
+    Serial.println(gyro_cal_z);
+
   }
-    
+
   gyro_cal_x /= 1000.0;
   gyro_cal_y /= 1000.0;
   gyro_cal_z /= 1000.0;
@@ -193,8 +204,11 @@ void setup()
   Serial.print(gyro_cal_y);
   Serial.print(" ");
   Serial.println(gyro_cal_z);
-////////////////////////////////////
+  ///
+  ///
 
+  //
+  //initialise pins
   pinMode(rudder_in, INPUT); // inisialize  pinmodes for commands from the reciever
   pinMode(throttle_in, INPUT);
   pinMode(aileron_in, INPUT);
@@ -205,7 +219,11 @@ void setup()
   pinMode(land_pin, INPUT);
   pinMode(takeoff_pin, INPUT);
   pinMode(land_pin, INPUT);
+  ///
+  ///
 
+  //
+  //setup servos
   rudder_servo.attach(rudder_out); //attach servo objects to pins
   aileron_servo.attach(aileron_out);
   elevator_servo.attach(elevator_out);
@@ -215,34 +233,25 @@ void setup()
   aileron_servo.write(aileron_start);
   elevator_servo.write(elevator_start);
   throttle_servo.write(throttle_start);
-   
-  calibrateAlt();
-
+  ///
+  ///
   Serial.println("Setup Complete");
-  Serial.println(alt_offset);
-  
+
 }
 
 void loop()
 {
 
   recordGyroData();
-  gyroX -= gyro_cal_x;
+  gyroX -= gyro_cal_x;// apply callibration offset 
   gyroY -= gyro_cal_y;
   gyroZ -= gyro_cal_z;
 
-  /*Serial.print(gyroX);
-    Serial.print(" ");
-    Serial.print(gyroY);
-    Serial.print(" ");
-    Serial.println(gyroZ);
-  */
   convertGyroData();
   recordAccelData();
   caculateAngle();
   convertAccelData();
   displayData();
-  balance();
 
   if (int(millis() - print_timer) > 100)
   {
@@ -251,17 +260,18 @@ void loop()
   }
 
 
-  if (auto_pin == LOW){
-    
+  if (auto_pin == LOW) {
+    balance();
+
   }
-  else{
+  else {
     manuel();
   }
 }
 
 
 
-
+//read raw x, y, z vauees from accelerometer
 void recordAccelData()
 {
   compass.read();
@@ -270,6 +280,7 @@ void recordAccelData()
   accelZ = compass.a.z;
 }
 
+//convert raw data into g
 void convertAccelData()
 {
   gForceX = accelX / 16384.0;
@@ -277,6 +288,7 @@ void convertAccelData()
   gForceZ = accelZ / 16384.0;
 }
 
+//read raw gyro data
 void recordGyroData()
 {
   gyro.read();
@@ -286,16 +298,19 @@ void recordGyroData()
 
 }
 
+//convert gyro data into degrees/sec
 void convertGyroData()
 {
-  rotX = gyroX / 131.0;
-  rotY = gyroY / 131.0; // Conversion Factor given by data sheet for the 250deg/s setting
-  rotZ = gyroZ / 131.0; // Converts for Raw data to Deg/s
+  float conv_factor = 8.75; // Conversion Factor given by data sheet for the 250deg/s setting
+  rotX = gyroX / conv_factor;// Converts for Raw data to Deg/s
+  rotY = gyroY / conv_factor;
+  rotZ = gyroZ / conv_factor;
 }
 
+//use gyro and acclerometer and commpass data to calculate orientation
 void caculateAngle()
 {
-
+  float gyro_rate = 189.4;
 
   acc_vector = sqrt ((accelX * accelX) + (accelY * accelY) + (accelZ * accelZ)); // Calc Accel vector
 
@@ -303,9 +318,9 @@ void caculateAngle()
   float  acc_pitch_angle = asin(accelY / acc_vector) * (180.0 / 3.14); // Calc pitch angle
 
   //unsigned long sample_time = millis() - gyro_timer; // calculate time since angle was last calculated in ms
-  float delta_pitch = rotX / 250; // convert to ms to s and find angle moved sincce last measument
-  float delta_roll = rotY / 250;
-  float delta_yaw = rotZ / 250;
+  float delta_pitch = rotY / gyro_rate; // dvite by gyro sample rate to find angle moved sincce last measument
+  float delta_roll = rotX / gyro_rate;
+  float delta_yaw = rotZ / gyro_rate;
 
   roll_angle += delta_roll; // add change in angle to total angle
   pitch_angle += delta_pitch;
@@ -314,8 +329,13 @@ void caculateAngle()
   //pitch_angle += roll_angle * sin(yaw_angle * 0.000000533);
   //roll_angle -= pitch_angle * sin(yaw_angle * 0.000001066);
 
-  roll_angle = roll_angle * 0.92 + acc_roll_angle * 0.08; // buffer gyroscope with acccerometer data
-  pitch_angle = pitch_angle * 0.96 + acc_pitch_angle * 0.04;
+  roll_angle = roll_angle * 0.9992 + acc_roll_angle * 0.0008; // buffer gyroscope with acccerometer data
+  pitch_angle = pitch_angle * 0.9996 + acc_pitch_angle * 0.0004;
+
+//when plane is horizontal yaw ~= compass heading
+  if (roll_angle >= -5 and roll_angle <= 5) {
+    yaw_angle = compass.heading();
+  }
   if (!(roll_angle == roll_angle))
   {
     roll_angle = acc_roll_angle;
@@ -323,14 +343,15 @@ void caculateAngle()
   }
 }
 
-void displayData(){
+//display data on serial monitor
+void displayData() {
 
   Serial.print("G ");
-  Serial.print("X: ");
+  Serial.print("roll: ");
   Serial.print(roll_angle);
-  Serial.print(" Y: ");
+  Serial.print(" pitch: ");
   Serial.print(pitch_angle);
-  Serial.print(" Z: ");
+  Serial.print(" yaw: ");
   Serial.print(yaw_angle);
   Serial.print(" heading: ");
   Serial.print(compass.heading());
@@ -340,10 +361,23 @@ void displayData(){
   Serial.println(ps.readTemperatureC());
 
 }
+
+//write data to SD card
+//gyro, accel, orientation, and servo data writen to seperate files
 void writeData() {
   accel_data = SD.open(file_1, FILE_WRITE);
 
   if (accel_data) {
+    if (first_print) {
+      accel_data.print("gForceX");
+      accel_data.print(",");
+      accel_data.print("gForceY");
+      accel_data.print(",");
+      accel_data.print("gForceZ");
+      accel_data.print(",");
+      accel_data.print("ms");
+      accel_data.println(",");
+    }
     accel_data.print(gForceX);
     accel_data.print(",");
     accel_data.print(gForceY);
@@ -357,6 +391,16 @@ void writeData() {
   gyro_data = SD.open(file_2, FILE_WRITE);
 
   if (gyro_data) {
+    if (first_print) {
+      gyro_data.print("rotX");
+      gyro_data.print(",");
+      gyro_data.print("rotY");
+      gyro_data.print(",");
+      gyro_data.print("rotZ");
+      gyro_data.print(",");
+      gyro_data.print("millis");
+      gyro_data.println(",");
+    }
     gyro_data.print(rotX);
     gyro_data.print(",");
     gyro_data.print(rotY);
@@ -372,19 +416,64 @@ void writeData() {
   orientation_data = SD.open(file_3, FILE_WRITE);
 
   if (orientation_data) {
+    if (first_print) {
+      orientation_data.print("roll_angle");
+      orientation_data.print(",");
+      orientation_data.print("pitch_angle");
+      orientation_data.print(",");
+      orientation_data.print("yaw_angle");
+      orientation_data.print(", ");
+      orientation_data.print("millis");
+      orientation_data.println(",");
+    }
     orientation_data.print(roll_angle);
     orientation_data.print(",");
     orientation_data.print(pitch_angle);
+    orientation_data.print(",");
+    orientation_data.print("yaw_angle");
     orientation_data.print(",");
     orientation_data.print(millis());
     orientation_data.println(",");
   }
   orientation_data.close();
+
+  servo_data = SD.open(file_4, FILE_WRITE);
+
+  if (servo_data) {
+    if (first_print) {
+      servo_data.print("throttle_servo");
+      servo_data.print(", ");
+      servo_data.print("rudder_servo");
+      servo_data.print(", ");
+      servo_data.print("aileron_servo");
+      servo_data.print(", ");
+      servo_data.print("elevator_servo");
+      servo_data.print(", ");
+      servo_data.print("millis");
+      servo_data.println(", ");
+    }
+    servo_data.print(throttle_servo.read());
+    servo_data.print(", ");
+    servo_data.print(rudder_servo.read());
+    servo_data.print(", ");
+    servo_data.print(aileron_servo.read());
+    servo_data.print(", ");
+    servo_data.print(elevator_servo.read());
+    servo_data.print(", ");
+    servo_data.print(millis());
+    servo_data.println(", ");
+
+  }
+
+  servo_data.close();
+  first_print = false;
 }
+
+//keeps the plane flying horizontal
 void balance()
 {
   int y;
-  int x = roll_angle;
+  int x;
   if (roll_angle > 5)
   {
     y = 1 + rudder_servo.read();
@@ -399,6 +488,7 @@ void balance()
   }
 }
 
+//checks if servo angle exceeds max or min angle
 int checkAngle(int x)
 {
   if (x < servo_min)
@@ -417,6 +507,7 @@ int checkAngle(int x)
   }
 }
 
+//passes signals from receiver directly to servos
 void manuel() {
   analogWrite(aileron_out, analogRead(aileron_in));
   analogWrite(aileron_out, analogRead(aileron_in));
@@ -425,22 +516,24 @@ void manuel() {
   analogWrite(throttle_out, analogRead(throttle_in));
 }
 
-float readAlt(){
-  alt = ps.pressureToAltitudeMeters(ps.readPressureMillibars()) - alt_offset;
+//returns altitude +- 1m 
+// 0 is altitude where board was initialised
+float readAlt() {
+  alt = ps.pressureToAltitudeMeters(ps.readPressureMillibars())- alt_offset ;
   return alt;
 }
 
-void calibrateAlt(){
+//adjusts altitude so that ground level = 0
+void calibrateAlt() {
   float cal;
 
-  for(int x = 0; x < 1000; x++){
+  for (int x = 0; x < 1000; x++) {
     cal += ps.pressureToAltitudeMeters(ps.readPressureMillibars());
   }
   cal /= 1000;
 
   alt_offset = cal;
 }
-
 
 
 
