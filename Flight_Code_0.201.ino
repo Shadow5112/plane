@@ -476,15 +476,15 @@ void balance()
   int x;
   if (roll_angle > 5)
   {
-    y = 1 + rudder_servo.read();
+    y = 1 + aileron_sero.read();
     x = checkAngle(y);
-    rudder_servo.write(x);
+    aileron_sero.write(x);
   }
   if (roll_angle < 5)
   {
-    y = rudder_servo.read() - 1;
+    y = aileron_sero.read() - 1;
     x = checkAngle(y);
-    rudder_servo.write(x);
+    aileron_sero.write(x);
   }
 }
 
