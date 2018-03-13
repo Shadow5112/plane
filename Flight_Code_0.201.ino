@@ -26,6 +26,7 @@ LPS ps;
           CS / chip select - digital pin
 */
 
+
 ///
 ///Variables
 ///
@@ -33,6 +34,7 @@ long accelX, accelY, accelZ;
 float gForceX, gForceY, gForceZ;
 
 long gyroX, gyroY, gyroZ, gyro_cal_x, gyro_cal_y, gyro_cal_z;
+float gyro_offset_x, gyro_offset_y, gyro_offset_z;
 float rotX, rotY, rotZ;
 float alt, alt_offset;
 
@@ -48,9 +50,9 @@ Servo  rudder_servo,
        throttle_servo,
        aileron_servo,
        elevator_servo;
-       
+
 int num_files = 3; // number of files that will be created
-bool first_print = true;
+
 String file_1 = ("Accel.txt");
 String file_2 = ("Gyro.txt");
 String file_3 = ("Orien.txt");
@@ -61,6 +63,9 @@ File gyro_data;
 File orientation_data;
 File servo_data;
 
+//first loop bools
+bool first_print = true;
+bool first_data = true;
 ///
 ///
 ///
@@ -146,10 +151,8 @@ void manuel();
 ///
 ///
 ///
-
 void setup()
 {
-
   Serial.begin(9600);
   Wire.begin();
 
@@ -172,10 +175,11 @@ void setup()
   }
   ps.enableDefault();
   gyro.enableDefault();
+  gyro.writeReg(L3G::CTRL1, 0b010011111); //set data output rate to 400 Hz // i think
   compass.enableDefault();
   calibrateAlt();
-  ///
-  ///
+  //////
+  //////
 
   //
   //calibrate gyroscope
@@ -196,16 +200,16 @@ void setup()
 
   }
 
-  gyro_cal_x /= 1000.0;
-  gyro_cal_y /= 1000.0;
-  gyro_cal_z /= 1000.0;
-  Serial.print(gyro_cal_x);
+  gyro_offset_x = float(gyro_cal_x) / 1000.0;
+  gyro_offset_y = float(gyro_cal_y) / 1000.0;
+  gyro_offset_z = float(gyro_cal_z) / 1000.0;
+  Serial.print(gyro_offset_x);
   Serial.print(" ");
-  Serial.print(gyro_cal_y);
+  Serial.print(gyro_offset_y);
   Serial.print(" ");
-  Serial.println(gyro_cal_z);
-  ///
-  ///
+  Serial.println(gyro_offset_z);
+  /////
+  /////
 
   //
   //initialise pins
@@ -219,8 +223,8 @@ void setup()
   pinMode(land_pin, INPUT);
   pinMode(takeoff_pin, INPUT);
   pinMode(land_pin, INPUT);
-  ///
-  ///
+  /////
+  /////
 
   //
   //setup servos
@@ -233,40 +237,12 @@ void setup()
   aileron_servo.write(aileron_start);
   elevator_servo.write(elevator_start);
   throttle_servo.write(throttle_start);
-  ///
-  ///
+  /////
+  /////
+
   Serial.println("Setup Complete");
 
-}
-
-void loop()
-{
-
-  recordGyroData();
-  gyroX -= gyro_cal_x;// apply callibration offset 
-  gyroY -= gyro_cal_y;
-  gyroZ -= gyro_cal_z;
-
-  convertGyroData();
-  recordAccelData();
-  caculateAngle();
-  convertAccelData();
-  displayData();
-
-  if (int(millis() - print_timer) > 100)
-  {
-    writeData();
-    print_timer = millis();
-  }
-
-
-  if (auto_pin == LOW) {
-    balance();
-
-  }
-  else {
-    manuel();
-  }
+  
 }
 
 
@@ -307,41 +283,116 @@ void convertGyroData()
   rotZ = gyroZ / conv_factor;
 }
 
+float acc_pitch, acc_roll, acc_vec;
+unsigned long lag = 0;
+
 //use gyro and acclerometer and commpass data to calculate orientation
 void caculateAngle()
 {
-  float gyro_rate = 189.4;
+  float gyro_rate = 76.5;// sample rate of gyroscope - or at least some converstion factor
 
-  acc_vector = sqrt ((accelX * accelX) + (accelY * accelY) + (accelZ * accelZ)); // Calc Accel vector
-
-  float acc_roll_angle = asin(accelX / acc_vector) * (180.0 / 3.14); // Calc roll angle
-  float  acc_pitch_angle = asin(accelY / acc_vector) * (180.0 / 3.14); // Calc pitch angle
+  acc_vector = sqrt ((gForceX * gForceX) + (gForceY * gForceY) + (gForceZ * gForceZ)); // Calc Accel vector
+  acc_vec = acc_vector;
+  float acc_roll_angle =  asin(gForceY / acc_vector) * (180.0 / 3.14); // Calc roll angle range +- 90 degrees
+  float  acc_pitch_angle = asin(gForceX / acc_vector) * (180.0 / 3.14); // Calc pitch angle
 
   //unsigned long sample_time = millis() - gyro_timer; // calculate time since angle was last calculated in ms
-  float delta_pitch = rotY / gyro_rate; // dvite by gyro sample rate to find angle moved sincce last measument
-  float delta_roll = rotX / gyro_rate;
+  float delta_pitch = rotY / gyro_rate; // divite by gyro sample rate to find angle moved sincce last measument
+  float delta_roll = rotX / gyro_rate;  // gyro_rate  declared as local variable
   float delta_yaw = rotZ / gyro_rate;
 
   roll_angle += delta_roll; // add change in angle to total angle
   pitch_angle += delta_pitch;
   yaw_angle += delta_yaw;
 
+  ///
+  ///restrict roll angle to 0-360
+  ///
+  if (roll_angle > 360) {
+    roll_angle -= 360.0;
+  }
+  if (roll_angle < 0) {
+    roll_angle += 360.0;
+  }
+  if (gForceY <= 0.01 and gForceY >= -0.01 and gForceX < 0.9 and gForceX > -0.9 and gForceZ > 0) {
+    roll_angle = 0;
+  }
+  if (gForceY <= 0.01 and gForceY >= -0.01 and gForceX < 0.9 and gForceX > -0.9 and gForceZ < 0) {
+    roll_angle = 180;
+  }
+  //
+  //
+
   //pitch_angle += roll_angle * sin(yaw_angle * 0.000000533);
   //roll_angle -= pitch_angle * sin(yaw_angle * 0.000001066);
 
-  roll_angle = roll_angle * 0.9992 + acc_roll_angle * 0.0008; // buffer gyroscope with acccerometer data
-  pitch_angle = pitch_angle * 0.9996 + acc_pitch_angle * 0.0004;
+  ///
+  ///correct acc_roll-angle to range of 0 - 360 degrees
+  ///
+  if (gForceY >= 0 and gForceZ <= 0) { // quadrant 1
+    acc_roll_angle = 90.0 + (90.0 - acc_roll_angle);
+  }
+  if (gForceY < 0 and gForceZ < 0) { // quardant 4
+    acc_roll_angle = 90 + (90.0 - acc_roll_angle);
+  }
+  if (gForceY < 0 and gForceZ > 0) { //quadrant 3
+    acc_roll_angle = 270 + (90 + acc_roll_angle);
+  }
+  //
+  //
 
-//when plane is horizontal yaw ~= compass heading
+
+  ///
+  ///correct acc_pitch_angle to range of 0 - 360 degrees
+  ///
+  if (gForceX > 0 and gForceZ < 0) { //quadrant 2
+    acc_pitch_angle = 90.0 + (90.0 - acc_pitch_angle);
+  }
+
+  if (gForceX < 0 and gForceZ < 0) {
+    acc_pitch_angle = 90.0 + (90 - acc_pitch_angle);
+  }
+  if (gForceX < 0 and gForceZ > 0) {
+    acc_pitch_angle = 270 + (90 + acc_pitch_angle);
+  }
+  //
+  //
+
+  if (first_data) {
+    roll_angle = acc_roll_angle;
+    pitch_angle = acc_pitch_angle;
+    first_data = false;
+  }
+  else {
+    if (acc_vector < 1.01 and acc_vector > 0.98)
+    {
+      roll_angle = roll_angle;// * 0.60 + acc_roll_angle * 0.4; // buffer gyroscope with acccerometer data
+      pitch_angle = pitch_angle;// * 0.60 + acc_pitch_angle * 0.4;
+    }
+    else {
+      roll_angle = roll_angle;// * 0.996 + acc_roll_angle * 0.004; // buffer gyroscope with acccerometer data
+      pitch_angle = pitch_angle;// * 0.996 + acc_pitch_angle * 0.004;
+    }
+  }
+
+  acc_roll = acc_roll_angle;
+  acc_pitch = acc_pitch_angle;
+
+  //when plane is horizontal yaw ~= compass heading
   if (roll_angle >= -5 and roll_angle <= 5) {
     yaw_angle = compass.heading();
   }
-  if (!(roll_angle == roll_angle))
+
+
+  if (!(roll_angle == roll_angle) or !(pitch_angle == pitch_angle))  //check for NaN
   {
     roll_angle = acc_roll_angle;
     pitch_angle = acc_pitch_angle;
   }
+
+  lag = millis();
 }
+
 
 //display data on serial monitor
 void displayData() {
@@ -353,12 +404,28 @@ void displayData() {
   Serial.print(pitch_angle);
   Serial.print(" yaw: ");
   Serial.print(yaw_angle);
+
+
   Serial.print(" heading: ");
   Serial.print(compass.heading());
-  Serial.print(" Alt: ");
-  Serial.print(readAlt());
-  Serial.print(" temp: ");
-  Serial.println(ps.readTemperatureC());
+  Serial.print(" mx: ");
+  Serial.print(gForceX);
+  Serial.print(" my: ");
+  Serial.print(gForceY);
+  Serial.print(" mz: ");
+  Serial.print(gForceZ);
+  Serial.print(" accle_pitch: ");
+  Serial.print(acc_pitch);
+  Serial.print(" accel_roll: ");
+  Serial.print(acc_roll);
+  Serial.print(" acc vect: ");
+  Serial.print(acc_vec);
+  Serial.print( " lag: ");
+  Serial.println(millis() - lag);
+
+
+
+
 
 }
 
