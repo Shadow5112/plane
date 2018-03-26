@@ -26,7 +26,6 @@ LPS ps;
           CS / chip select - digital pin
 */
 
-
 ///
 ///Variables
 ///
@@ -41,9 +40,13 @@ float alt, alt_offset;
 float vel;
 
 float pitch_angle, roll_angle, yaw_angle, acc_vector;
+float acc_pitch, acc_roll, acc_vec;
+unsigned long lag = 0;
 
 unsigned long print_timer = 0;
+unsigned long display_timer = 0;
 unsigned long print_timer_2 = 0;
+unsigned long gyro_timer = 0;
 
 //declare servo variables
 Servo  rudder_servo,
@@ -151,8 +154,10 @@ void manuel();
 ///
 ///
 ///
+
 void setup()
 {
+
   Serial.begin(9600);
   Wire.begin();
 
@@ -175,7 +180,8 @@ void setup()
   }
   ps.enableDefault();
   gyro.enableDefault();
-  gyro.writeReg(L3G::CTRL1, 0b010011111); //set data output rate to 400 Hz // i think
+  //gyro.writeReg(L3G::CTRL1, 0b010101111); //set data output rate to 400 Hz // i think
+  // gyro.writeReg(L3G::CTRL2, 0b00100000);
   compass.enableDefault();
   calibrateAlt();
   //////
@@ -192,12 +198,13 @@ void setup()
     gyro_cal_y += gyroY;
     gyro_cal_z += gyroZ;
     delay(3);
-    Serial.print(gyro_cal_x);
-    Serial.print(" ");
-    Serial.print(gyro_cal_y);
-    Serial.print(" ");
-    Serial.println(gyro_cal_z);
-
+    /*
+      Serial.print(gyro_cal_x);
+      Serial.print(" ");
+      Serial.print(gyro_cal_y);
+      Serial.print(" ");
+      Serial.println(gyro_cal_z);
+    */
   }
 
   gyro_offset_x = float(gyro_cal_x) / 1000.0;
@@ -242,7 +249,42 @@ void setup()
 
   Serial.println("Setup Complete");
 
-  
+}
+
+void loop()
+{
+
+  recordGyroData();
+
+  gyroX -= gyro_offset_x;// apply callibration offset
+  gyroY -= gyro_offset_y;
+  gyroZ -= gyro_offset_z;
+
+  convertGyroData();
+  recordAccelData();
+  convertAccelData();
+  caculateAngle();
+
+  if ((millis() - display_timer)  > 50) {
+    displayData();
+    display_timer = millis();
+  }
+
+
+  if (int(millis() - print_timer) > 500)
+  {
+    writeData();
+    print_timer = millis();
+  }
+
+
+  if (auto_pin == LOW) {
+    balance();
+
+  }
+  else {
+    manuel();
+  }
 }
 
 
@@ -259,9 +301,10 @@ void recordAccelData()
 //convert raw data into g
 void convertAccelData()
 {
-  gForceX = accelX / 16384.0;
-  gForceY = accelY / 16384.0; // Converts raw Accel Data into G-Froce
-  gForceZ = accelZ / 16384.0;
+  float conv_factor = 0.000061;
+  gForceX = accelX * conv_factor;
+  gForceY = accelY * conv_factor; // Converts raw Accel Data into G-Froce
+  gForceZ = accelZ * conv_factor;
 }
 
 //read raw gyro data
@@ -277,26 +320,27 @@ void recordGyroData()
 //convert gyro data into degrees/sec
 void convertGyroData()
 {
-  float conv_factor = 8.75; // Conversion Factor given by data sheet for the 250deg/s setting
+  float conv_factor = 17.5; // Conversion Factor given by data sheet for the 250deg/s setting
   rotX = gyroX / conv_factor;// Converts for Raw data to Deg/s
   rotY = gyroY / conv_factor;
   rotZ = gyroZ / conv_factor;
 }
 
-float acc_pitch, acc_roll, acc_vec;
-unsigned long lag = 0;
 
 //use gyro and acclerometer and commpass data to calculate orientation
 void caculateAngle()
 {
-  float gyro_rate = 76.5;// sample rate of gyroscope - or at least some converstion factor
+  float gyro_rate;// = 64;// some convertion factor that is supposed to be based on the sample rate
 
   acc_vector = sqrt ((gForceX * gForceX) + (gForceY * gForceY) + (gForceZ * gForceZ)); // Calc Accel vector
   acc_vec = acc_vector;
+
   float acc_roll_angle =  asin(gForceY / acc_vector) * (180.0 / 3.14); // Calc roll angle range +- 90 degrees
   float  acc_pitch_angle = asin(gForceX / acc_vector) * (180.0 / 3.14); // Calc pitch angle
 
-  //unsigned long sample_time = millis() - gyro_timer; // calculate time since angle was last calculated in ms
+  int sample_time = millis() - gyro_timer; // calculate time since angle was last calculated in ms
+
+  gyro_rate = (sample_time * 1000.0) / float(millis() - lag);
   float delta_pitch = rotY / gyro_rate; // divite by gyro sample rate to find angle moved sincce last measument
   float delta_roll = rotX / gyro_rate;  // gyro_rate  declared as local variable
   float delta_yaw = rotZ / gyro_rate;
@@ -306,7 +350,7 @@ void caculateAngle()
   yaw_angle += delta_yaw;
 
   ///
-  ///restrict roll angle to 0-360
+  ///restrict roll angle as meeasured by gryo to 0-360
   ///
   if (roll_angle > 360) {
     roll_angle -= 360.0;
@@ -314,11 +358,15 @@ void caculateAngle()
   if (roll_angle < 0) {
     roll_angle += 360.0;
   }
-  if (gForceY <= 0.01 and gForceY >= -0.01 and gForceX < 0.9 and gForceX > -0.9 and gForceZ > 0) {
+  // reset roll as pllane passes 0 or 180 degrees if plane is not pointing strait up or down
+  if (gForceY <= 0.015 and gForceY >= -0.015 and gForceX < 0.9 and gForceX > -0.9 and gForceZ > 0) {
     roll_angle = 0;
   }
-  if (gForceY <= 0.01 and gForceY >= -0.01 and gForceX < 0.9 and gForceX > -0.9 and gForceZ < 0) {
+  if (gForceY <= 0.015 and gForceY >= -0.015 and gForceX < 0.9 and gForceX > -0.9 and gForceZ < 0) {
     roll_angle = 180;
+  }
+  if (gForceX <= 0.015 and gForceX >= -0.015 and gForceZ > 0) {
+    pitch_angle = 0;
   }
   //
   //
@@ -358,21 +406,15 @@ void caculateAngle()
   //
   //
 
-  if (first_data) {
+  if (first_data) {// or abs(roll_angle - acc_roll_angle) > 10 or abs(pitch_angle - acc_roll_angle) > 10) {
     roll_angle = acc_roll_angle;
     pitch_angle = acc_pitch_angle;
     first_data = false;
   }
   else {
-    if (acc_vector < 1.01 and acc_vector > 0.98)
-    {
-      roll_angle = roll_angle;// * 0.60 + acc_roll_angle * 0.4; // buffer gyroscope with acccerometer data
-      pitch_angle = pitch_angle;// * 0.60 + acc_pitch_angle * 0.4;
-    }
-    else {
-      roll_angle = roll_angle;// * 0.996 + acc_roll_angle * 0.004; // buffer gyroscope with acccerometer data
-      pitch_angle = pitch_angle;// * 0.996 + acc_pitch_angle * 0.004;
-    }
+    roll_angle = roll_angle;// * 0.996 + acc_roll_angle * 0.004; // buffer gyroscope with acccerometer data
+    pitch_angle = pitch_angle;// * 0.996 + acc_pitch_angle * 0.004;
+
   }
 
   acc_roll = acc_roll_angle;
@@ -391,13 +433,24 @@ void caculateAngle()
   }
 
   lag = millis();
+  gyro_timer = millis();
 }
 
 
 //display data on serial monitor
 void displayData() {
 
-  Serial.print("G ");
+  /*
+    Serial.print("aileron servo: ");
+    Serial.print(aileron_servo.read());
+    Serial.print(" elevator servo: ");
+    Serial.print(elevator_servo.read());
+    Serial.print(" rudder servo: ");
+    Serial.print(rudder_servo.read());
+    Serial.print(" throttle_servo: ");
+    Serial.print(throttle_servo.read());
+  */
+
   Serial.print("roll: ");
   Serial.print(roll_angle);
   Serial.print(" pitch: ");
@@ -405,15 +458,16 @@ void displayData() {
   Serial.print(" yaw: ");
   Serial.print(yaw_angle);
 
-
-  Serial.print(" heading: ");
-  Serial.print(compass.heading());
-  Serial.print(" mx: ");
-  Serial.print(gForceX);
-  Serial.print(" my: ");
-  Serial.print(gForceY);
-  Serial.print(" mz: ");
-  Serial.print(gForceZ);
+  /*
+    Serial.print(" heading: ");
+    Serial.print(compass.heading());
+    Serial.print(" gx: ");
+    Serial.print(gForceX);
+    Serial.print(" gy: ");
+    Serial.print(gForceY);
+    Serial.print(" gz: ");
+    Serial.print(gForceZ);
+  */
   Serial.print(" accle_pitch: ");
   Serial.print(acc_pitch);
   Serial.print(" accel_roll: ");
@@ -497,42 +551,44 @@ void writeData() {
     orientation_data.print(",");
     orientation_data.print(pitch_angle);
     orientation_data.print(",");
-    orientation_data.print("yaw_angle");
+    orientation_data.print(yaw_angle);
     orientation_data.print(",");
     orientation_data.print(millis());
     orientation_data.println(",");
   }
   orientation_data.close();
+  /*
+    servo_data = SD.open(file_4, FILE_WRITE);
 
-  servo_data = SD.open(file_4, FILE_WRITE);
 
-  if (servo_data) {
-    if (first_print) {
-      servo_data.print("throttle_servo");
-      servo_data.print(", ");
-      servo_data.print("rudder_servo");
-      servo_data.print(", ");
-      servo_data.print("aileron_servo");
-      servo_data.print(", ");
-      servo_data.print("elevator_servo");
-      servo_data.print(", ");
-      servo_data.print("millis");
-      servo_data.println(", ");
-    }
-    servo_data.print(throttle_servo.read());
-    servo_data.print(", ");
-    servo_data.print(rudder_servo.read());
-    servo_data.print(", ");
-    servo_data.print(aileron_servo.read());
-    servo_data.print(", ");
-    servo_data.print(elevator_servo.read());
-    servo_data.print(", ");
-    servo_data.print(millis());
-    servo_data.println(", ");
+      if (servo_data) {
+       if (first_print) {
+         servo_data.print("throttle_servo");
+         servo_data.print(", ");
+         servo_data.print("rudder_servo");
+         servo_data.print(", ");
+         servo_data.print("aileron_servo");
+         servo_data.print(", ");
+         servo_data.print("elevator_servo");
+         servo_data.print(", ");
+         servo_data.print("millis");
+         servo_data.println(", ");
+       }
+       servo_data.print(throttle_servo.read());
+       servo_data.print(", ");
+       servo_data.print(rudder_servo.read());
+       servo_data.print(", ");
+       servo_data.print(aileron_servo.read());
+       servo_data.print(", ");
+       servo_data.print(elevator_servo.read());
+       servo_data.print(", ");
+       servo_data.print(millis());
+       servo_data.println(", ");
 
-  }
+      }
 
-  servo_data.close();
+      servo_data.close();
+  */
   first_print = false;
 }
 
@@ -543,15 +599,15 @@ void balance()
   int x;
   if (roll_angle > 5)
   {
-    y = 1 + aileron_sero.read();
+    y = 1 + aileron_servo.read();
     x = checkAngle(y);
-    aileron_sero.write(x);
+    aileron_servo.write(x);
   }
   if (roll_angle < 5)
   {
-    y = aileron_sero.read() - 1;
+    y = aileron_servo.read() - 1;
     x = checkAngle(y);
-    aileron_sero.write(x);
+    aileron_servo.write(x);
   }
 }
 
@@ -583,10 +639,10 @@ void manuel() {
   analogWrite(throttle_out, analogRead(throttle_in));
 }
 
-//returns altitude +- 1m 
+//returns altitude +- 1m
 // 0 is altitude where board was initialised
 float readAlt() {
-  alt = ps.pressureToAltitudeMeters(ps.readPressureMillibars())- alt_offset ;
+  alt = ps.pressureToAltitudeMeters(ps.readPressureMillibars()) - alt_offset ;
   return alt;
 }
 
@@ -600,6 +656,10 @@ void calibrateAlt() {
   cal /= 1000;
 
   alt_offset = cal;
+}
+
+void takeoff() {
+
 }
 
 
