@@ -474,6 +474,8 @@ void caculateAngle()
 
 
 //display data on serial monitor
+//when testing ensure that lag due to serial output does not exceed the output rate of the IMU
+//for 250Hz lag must stay under ~4ms
 void displayData() {
 
   /***************************
