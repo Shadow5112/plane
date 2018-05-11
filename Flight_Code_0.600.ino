@@ -104,6 +104,9 @@ int land_pin;
 int takeoff_pin;
 
 
+int trig_pin =38;
+int echo_pin = 36;
+
 /****************************************************
                 INITIAL VAlUES
 *****************************************************/
@@ -140,8 +143,9 @@ void caculateAngle();
 void displayGyroAccel();
 void writeData();
 void update_velocity();
-float readAlt();
 void displayData();
+float readAlt_Br();
+float readAlt_US();
 
 //auto pilot functions
 void barrel_roll();
@@ -169,25 +173,33 @@ void setup()
   if (!gyro.init()) {
     Serial.println("Failed  to autodetect gyro type");
   }
+  else{
+      gyro.enableDefault();
+  //gyro.writeReg(L3G::CTRL1, 0b010101111); //set data output rate to 400 Hz // i think
+  // gyro.writeReg(L3G::CTRL2, 0b00100000);
+  }
 
   if (!compass.init()) {
     Serial.println("failed to detect compass");
+  }
+  else{
+      compass.enableDefault();
   }
 
   if (!ps.init()) {
     Serial.println("failed to detect presure sensor");
   }
-  ps.enableDefault();
-  gyro.enableDefault();
-  //gyro.writeReg(L3G::CTRL1, 0b010101111); //set data output rate to 400 Hz // i think
-  // gyro.writeReg(L3G::CTRL2, 0b00100000);
-  compass.enableDefault();
-  calibrateAlt();
+  else{
+      ps.enableDefault();
+      calibrateAlt();
+  }
+
 
 
   /*****************************
     calibrate gyroscope
   *****************************/
+  if(gyro.init()){
   for (int i = 1; i <= 1000; i++)
   {
 
@@ -215,6 +227,7 @@ void setup()
   Serial.print(gyro_offset_y);
   Serial.print(" ");
   Serial.println(gyro_offset_z);
+  }
 
   /*********************
     initialise pins
@@ -229,6 +242,9 @@ void setup()
   pinMode(land_pin, INPUT);
   pinMode(takeoff_pin, INPUT);
   pinMode(land_pin, INPUT);
+   
+  pinMode(trig_pin, OUTPUT);// inisialize pins fro ultra sonic sensor
+  pinMode(echo_pin, INPUT); 
 
   /*******************
     setup servos
@@ -706,9 +722,47 @@ void manuel() {
   analogWrite(throttle_out, analogRead(throttle_in));
 }
 
+//returns  altutude in cm with ~3mm precision
+//range - 400cm
+float readAlt_US(){
+  long duration;
+  float m, true_alt;
+  float roll = roll_angle;
+  float pitch = pitch_angle;
+
+  // restric pitch and roll 
+  
+  if(roll > 180){
+    roll -= 360;
+  }
+  if(pitch > 180){
+    pitch -= 360;
+  }
+  
+  digitalWrite(trig_pin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trig_pin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trig_pin, LOW);  
+
+  pinMode(echo_pin, INPUT);
+  duration = pulseIn(echo_pin, HIGH);
+
+  m = duration*.0343/2;
+  
+  //calculate true altitude acounting for pitch and roll
+  true_alt = m * sqrt(1 - cos(90-roll)*cos(90-roll) - cos(90-pitch)*cos(90-pitch)); 
+  
+  if( m < 400 ){
+  return true_alt;
+  }
+  else{
+    return -1;
+  }
+}
 //returns altitude +- 1m
 // 0 is altitude where board was initialised
-float readAlt() {
+float readAlt_Br() {
   alt = ps.pressureToAltitudeMeters(ps.readPressureMillibars()) - alt_offset ;
   return alt;
 }
